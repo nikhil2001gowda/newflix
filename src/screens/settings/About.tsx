@@ -102,13 +102,18 @@ export const checkForUpdate = async (
   setUpdateLoading(true);
   try {
     const res = await fetch(
-      'https://api.github.com/repos/vega-org/vega-app/releases/latest',
+      'https://api.github.com/repos/nikhil2001gowda/newflix/releases/latest',
     );
     if (res.status === 403 || res.status === 429) {
       ToastAndroid.show(
         'GitHub API rate limit exceeded. Please wait a few minutes before trying again.',
         ToastAndroid.LONG,
       );
+      setUpdateLoading(false);
+      return;
+    }
+    if (res.status === 404) {
+      showToast && ToastAndroid.show('App is up to date', ToastAndroid.SHORT);
       setUpdateLoading(false);
       return;
     }
@@ -178,7 +183,7 @@ export const checkForUpdate = async (
       error.message.toLowerCase().includes('rate limit');
     const msg = isRateLimit
       ? 'GitHub API rate limit exceeded. Please wait a few minutes before trying again.'
-      : 'Failed to check for update';
+      : 'Unable to connect to update server';
     ToastAndroid.show(msg, ToastAndroid.SHORT);
     console.log('Update error', error);
   }

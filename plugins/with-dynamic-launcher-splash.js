@@ -62,6 +62,7 @@ const createLauncherAlias = (
       category: [
         {$: {'android:name': 'android.intent.category.LAUNCHER'}},
         {$: {'android:name': 'android.intent.category.LEANBACK_LAUNCHER'}},
+        {$: {'android:name': 'com.amazon.tv.launcher'}},
       ],
     },
   ],

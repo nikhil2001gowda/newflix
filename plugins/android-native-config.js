@@ -15,6 +15,41 @@ const withAndroidNativeConfig = config => {
       application.$['android:largeHeap'] = 'true';
     }
 
+    // Ensure universal TV compatibility (Android TV, Google TV, Fire TV, and mobile)
+    manifestConfig.modResults.manifest['uses-feature'] =
+      manifestConfig.modResults.manifest['uses-feature'] || [];
+
+    const tvFeatures = [
+      'android.software.leanback',
+      'android.hardware.touchscreen',
+      'android.hardware.gamepad',
+      'com.amazon.hardware.tv_screen',
+      'android.hardware.microphone',
+      'android.hardware.camera',
+      'android.hardware.camera.autofocus',
+      'android.hardware.telephony',
+      'android.hardware.location',
+      'android.hardware.location.gps',
+      'android.hardware.wifi',
+      'android.hardware.bluetooth',
+    ];
+
+    tvFeatures.forEach(featureName => {
+      const existing = manifestConfig.modResults.manifest['uses-feature'].find(
+        f => f.$?.['android:name'] === featureName,
+      );
+      if (existing) {
+        existing.$['android:required'] = 'false';
+      } else {
+        manifestConfig.modResults.manifest['uses-feature'].push({
+          $: {
+            'android:name': featureName,
+            'android:required': 'false',
+          },
+        });
+      }
+    });
+
     // Custom "add provider source" intent (action + "url" extra, no data URI).
     // BROWSABLE lets web pages fire it through a Chrome intent: URI.
     const mainActivity = application?.activity?.find(

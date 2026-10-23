@@ -34,8 +34,17 @@ class LauncherIconModule(reactContext: ReactApplicationContext) : ReactContextBa
     }
 
     private val isTv: Boolean
-        get() = (reactApplicationContext.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager)
-            ?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+        get() {
+            val context = reactApplicationContext
+            val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+            if (uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION) {
+                return true
+            }
+            val pm = context.packageManager
+            return pm.hasSystemFeature("amazon.hardware.tv_screen") ||
+                   pm.hasSystemFeature("android.software.leanback") ||
+                   pm.hasSystemFeature("android.hardware.type.television")
+        }
 
     // TV launchers redraw the banner on every alias change, so TV applies only the
     // last selection, when the user leaves Vega.

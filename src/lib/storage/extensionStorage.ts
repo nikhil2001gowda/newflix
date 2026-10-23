@@ -172,9 +172,7 @@ export class ExtensionStorage {
    * Get provider sources
    */
   getProviderSource(getDefault = true): ProviderSource | undefined {
-    const sources =
-      mainStorage.getArray<ProviderSource>(ExtensionKeys.PROVIDER_SOURCES) ||
-      [];
+    const sources = this.getProviderSources();
     if (sources.length === 0) {
       return undefined;
     }
@@ -187,9 +185,26 @@ export class ExtensionStorage {
    * Get all provider sources
    */
   getProviderSources(): ProviderSource[] {
-    return (
-      mainStorage.getArray<ProviderSource>(ExtensionKeys.PROVIDER_SOURCES) || []
-    );
+    const sources =
+      mainStorage.getArray<ProviderSource>(ExtensionKeys.PROVIDER_SOURCES) || [];
+    if (sources.length === 0) {
+      const defaultSources: ProviderSource[] = [
+        {
+          author: 'nikhil2001gowda',
+          url: 'https://raw.githubusercontent.com/nikhil2001gowda/newflix-providers/main',
+          manifestUrl: 'https://raw.githubusercontent.com/nikhil2001gowda/newflix-providers/main/manifest.json',
+          isDefault: true,
+        },
+        {
+          author: 'Zenda-Cross',
+          url: 'https://raw.githubusercontent.com/Zenda-Cross/vega-providers/main',
+          isDefault: false,
+        },
+      ];
+      mainStorage.setArray(ExtensionKeys.PROVIDER_SOURCES, defaultSources);
+      return defaultSources;
+    }
+    return sources;
   }
 
   /**

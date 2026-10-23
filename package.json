@@ -5,8 +5,10 @@
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "android": "npm run build:sandbox && expo run:android",
+    "android:release": "npm run build:sandbox && cd android && unset ANDROID_PREFS_ROOT && ./gradlew assembleRelease",
     "android:keystore": "node scripts/paste-keystore.js",
     "android:tv": "npm run build:sandbox && cross-env EXPO_TV=1 expo run:android",
+    "build:apk": "npm run prebuild:clean && cd android && unset ANDROID_PREFS_ROOT && ./gradlew assembleRelease",
     "ios": "npm run build:sandbox && expo run:ios",
     "lint": "eslint .",
     "start": "expo start",
@@ -15,9 +17,9 @@
     "build:sandbox": "node scripts/build-sandbox-runtime.mjs",
     "test": "jest",
     "pretest": "npm run build:sandbox",
-    "prebuild": "npm run build:sandbox && expo prebuild",
-    "prebuild:clean": "npm run build:sandbox && expo prebuild --clean",
-    "prebuild:tv": "npm run build:sandbox && cross-env EXPO_TV=1 expo prebuild",
+    "prebuild": "npm run build:sandbox && expo prebuild --platform android",
+    "prebuild:clean": "npm run build:sandbox && expo prebuild --clean --platform android",
+    "prebuild:tv": "npm run build:sandbox && cross-env EXPO_TV=1 expo prebuild --platform android",
     "postinstall": "patch-package"
   },
   "dependencies": {

@@ -45,7 +45,7 @@ export const themes: {name: string; color: string}[] = [
 ];
 
 export const socialLinks = {
-  github: 'https://github.com/vega-org/vega-app',
+  github: 'https://github.com/nikhil2001gowda/newflix',
   discord: 'https://discord.gg/cr42m6maWy',
-  sponsor: 'https://github.com/sponsors/Zenda-Cross',
+  sponsor: 'https://github.com/sponsors/nikhil2001gowda',
 };

@@ -1,0 +1,216 @@
+import { throwProviderError } from "../providerErrors";
+
+export async function gdflixExtractor(
+  link: string,
+  signal: AbortSignal,
+  axios: any,
+  cheerio: any,
+  headers: Record<string, string>,
+  providerContext?: any,
+) {
+  try {
+    let wafCookies: string | undefined;
+    try {
+      await axios.get(link, { headers, signal });
+    } catch (error: any) {
+      if (error.response?.status === 403 && providerContext?.openWebView) {
+        console.log("gdflix: WAF detected (403), using solver...");
+        const baseUrl = link.split("/").slice(0, 3).join("/");
+        const wafResult = await providerContext.openWebView(link, {
+          title: "Solve the captcha below and click done",
+          description: "Required to bypass GDFlix anti-bot protection.",
+          headers: { ...headers, Referer: baseUrl },
+          force: true,
+          waitForCookie: "cf_clearance",
+        });
+        wafCookies = wafResult.cookies;
+      } else {
+        throw error;
+      }
+    }
+
+    if (wafCookies) {
+      headers["Cookie"] = wafCookies;
+    }
+
+    const streamLinks: any[] = [];
+    const res = await axios(`${link}`, { headers, signal });
+    console.log("gdflixExtractor", link);
+    const data = res.data;
+    let $drive = cheerio.load(data);
+    // handle if redirected to another link
+
+    if ($drive("body").attr("onload")?.includes("location.replace")) {
+      const newLink = $drive("body")
+        .attr("onload")
+        ?.split("location.replace('")?.[1]
+        .split("'")?.[0];
+
+      console.log("newLink", newLink);
+      if (newLink) {
+        const newRes = await axios.get(newLink, { headers, signal });
+        $drive = cheerio.load(newRes.data);
+      }
+    }
+
+    // try {
+    //   const resumeBot = $drive('.fab.fa-artstation').prev().attr('href') || '';
+    //   console.log('resumeBot', resumeBot);
+    //   const resumeBotRes = await axios.get(resumeBot, {headers});
+    //   const resumeBotToken = resumeBotRes.data.match(
+    //     /formData\.append\('token', '([a-f0-9]+)'\)/,
+    //   )[1];
+    //   const resumeBotBody = new FormData();
+    //   resumeBotBody.append('token', resumeBotToken);
+    //   const resumeBotPath = resumeBotRes.data.match(
+    //     /fetch\('\/download\?id=([a-zA-Z0-9\/+]+)'/,
+    //   )[1];
+    //   const resumeBotBaseUrl = resumeBot.split('/download')[0];
+    //   // console.log(
+    //   //   'resumeBotPath',
+    //   //   resumeBotBaseUrl + '/download?id=' + resumeBotPath,
+    //   // );
+    //   // console.log('resumeBotBody', resumeBotToken);
+
+    //   const resumeBotDownload = await fetch(
+    //     resumeBotBaseUrl + '/download?id=' + resumeBotPath,
+    //     {
+    //       method: 'POST',
+    //       body: resumeBotBody,
+    //       headers: {
+    //         Referer: resumeBot,
+    //         Cookie: 'PHPSESSID=7e9658ce7c805dab5bbcea9046f7f308',
+    //       },
+    //     },
+    //   );
+    //   const resumeBotDownloadData = await resumeBotDownload.json();
+    //   console.log('resumeBotDownloadData', resumeBotDownloadData.url);
+    //   streamLinks.push({
+    //     server: 'ResumeBot',
+    //     link: resumeBotDownloadData.url,
+    //     type: 'mkv',
+    //   });
+    // } catch (err) {
+    //   console.log('ResumeBot link not found', err);
+    // }
+
+    /// resume cloud
+    try {
+      const baseUrl = link.split("/").slice(0, 3).join("/");
+      const resumeDrive = $drive(".btn-secondary").attr("href") || "";
+      console.log("resumeDrive", resumeDrive);
+      if (resumeDrive.includes("indexbot")) {
+        const resumeBotRes = await axios.get(resumeDrive, { headers });
+        const resumeBotToken = resumeBotRes.data.match(
+          /formData\.append\('token', '([a-f0-9]+)'\)/,
+        )[1];
+        const resumeBotBody = new FormData();
+        resumeBotBody.append("token", resumeBotToken);
+        const resumeBotPath = resumeBotRes.data.match(
+          /fetch\('\/download\?id=([a-zA-Z0-9\/+]+)'/,
+        )[1];
+        const resumeBotBaseUrl = resumeDrive.split("/download")[0];
+        // console.log(
+        //   'resumeBotPath',
+        //   resumeBotBaseUrl + '/download?id=' + resumeBotPath,
+        // );
+        // console.log('resumeBotBody', resumeBotToken);
+
+        const resumeBotDownload = await fetch(
+          resumeBotBaseUrl + "/download?id=" + resumeBotPath,
+          {
+            method: "POST",
+            body: resumeBotBody,
+            headers: {
+              Referer: resumeDrive,
+              Cookie: "PHPSESSID=7e9658ce7c805dab5bbcea9046f7f308",
+            },
+          },
+        );
+        const resumeBotDownloadData = await resumeBotDownload.json();
+        console.log("resumeBotDownloadData", resumeBotDownloadData.url);
+        streamLinks.push({
+          server: "ResumeBot",
+          link: resumeBotDownloadData.url,
+          type: "mkv",
+        });
+      } else {
+        const url = baseUrl + resumeDrive;
+        const resumeDriveRes = await axios.get(url, { headers });
+        const resumeDriveHtml = resumeDriveRes.data;
+        const $resumeDrive = cheerio.load(resumeDriveHtml);
+        const resumeLink = $resumeDrive(".btn-success").attr("href");
+        //   console.log('resumeLink', resumeLink);
+        if (resumeLink) {
+          streamLinks.push({
+            server: "ResumeCloud",
+            link: resumeLink,
+            type: "mkv",
+          });
+        }
+      }
+    } catch (err) {
+      console.log("Resume link not found");
+    }
+
+    //instant link
+    try {
+      const seed = $drive(".btn-danger").attr("href") || "";
+      if (seed && seed.startsWith("http")) {
+        if (seed.includes("url=")) {
+          const directPart = decodeURIComponent(seed.split("url=")[1]);
+          if (directPart && directPart.startsWith("http")) {
+            streamLinks.push({ server: "Instant Download", link: directPart, type: "mkv" });
+          }
+        }
+
+        try {
+          const vRes = await axios.get(seed, {
+            headers: { ...headers, Referer: link },
+            maxRedirects: 0,
+            validateStatus: (s: number) => s >= 200 && s < 400,
+            signal,
+          });
+
+          const loc = vRes.headers?.location;
+          if (loc) {
+            let directGoogleUrl: string | null = null;
+            if (loc.includes("url=")) {
+              directGoogleUrl = decodeURIComponent(loc.split("url=")[1]);
+            } else if (loc.includes("googleusercontent.com") || loc.startsWith("http")) {
+              directGoogleUrl = loc;
+            }
+            if (directGoogleUrl && directGoogleUrl.startsWith("http")) {
+              streamLinks.push({ server: "Instant Download", link: directGoogleUrl, type: "mkv" });
+            }
+          } else if (typeof vRes.data === "string") {
+            const upMatch = vRes.data.match(/window\.location\.href\s*=\s*["']([^"']+)["']/);
+            if (upMatch) {
+              const upPath = upMatch[1];
+              const vOrigin = new URL(seed).origin;
+              const upUrl = upPath.startsWith("http") ? upPath : vOrigin + upPath;
+              const upRes = await axios.get(upUrl, {
+                headers: { ...headers, Referer: seed },
+                signal,
+              });
+              const loc2 = upRes.headers?.location;
+              if (loc2 && loc2.startsWith("http")) {
+                streamLinks.push({ server: "Instant Download", link: loc2, type: "mkv" });
+              } else if (typeof upRes.data === "string") {
+                const $up = cheerio.load(upRes.data);
+                const dlBtn = $up("#downloadBtn, a.btn-danger, a.btn-success").attr("href");
+                if (dlBtn && dlBtn.startsWith("http")) {
+                  streamLinks.push({ server: "Instant Download", link: dlBtn, type: "mkv" });
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+
+    return streamLinks;
+  } catch (error) {
+    return streamLinks;
+  }
+}

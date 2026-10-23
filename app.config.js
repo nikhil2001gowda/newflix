@@ -19,7 +19,7 @@ const proxyApiUrl =
 
 module.exports = () => {
   const IS_PLAYSTORE = process.env.APP_VARIANT === 'playstore';
-  const IS_TV = process.env.EXPO_TV === '1' || process.env.APP_VARIANT === 'tv';
+  const IS_TV = process.env.EXPO_TV !== '0';
   const HAS_FIREBASE =
     !IS_PLAYSTORE && (hasAndroidGoogleServices || hasIosGooglePlist);
   const PACKAGE_NAME = IS_PLAYSTORE ? 'vega.app' : 'com.vega';
@@ -115,12 +115,7 @@ module.exports = () => {
       },
     ],
 
-    [
-      'expo-dev-client',
-      {
-        launchMode: 'most-recent',
-      },
-    ],
+    // 'expo-dev-client',
     'expo-font',
     'expo-status-bar',
     ...(IS_TV
@@ -194,6 +189,7 @@ module.exports = () => {
         supportsPictureInPicture: true,
       },
       ios: {
+        bundleIdentifier: PACKAGE_NAME,
         ...(!IS_PLAYSTORE && hasIosGooglePlist
           ? {googleServicesFile: iosGoogleServicesFile}
           : {}),

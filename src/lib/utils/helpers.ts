@@ -337,10 +337,16 @@ export const createProviderSource = (value: string): ProviderSource => {
     throw new Error('Invalid provider source name');
   }
 
+  const authorName = match[1];
+  const repoName =
+    authorName.toLowerCase() === 'nikhil2001gowda'
+      ? 'newflix-providers'
+      : DEFAULT_REPO_NAME;
+
   return toProviderSource({
     host,
-    author: match[1],
-    repo: DEFAULT_REPO_NAME,
+    author: authorName,
+    repo: repoName,
     branch: DEFAULT_BRANCH,
   });
 };
