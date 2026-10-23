@@ -1,6 +1,11 @@
-name: Nightly Build
+name: Build & Release
 
 on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
   schedule:
     # Runs at 12:00 AM India time (18:30 UTC of previous day)
     - cron: '30 18 * * *'
@@ -27,6 +32,12 @@ jobs:
         id: check_changes
         run: |
           git fetch --tags
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] || [ "${GITHUB_EVENT_NAME:-}" = "push" ]; then
+            echo "Push or tag event detected. Proceeding with build."
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           # Get the latest nightly tag if it exists
           LATEST_NIGHTLY_TAG=$(git tag -l "nightly-*" | sort -r | head -n 1 || echo "")
@@ -165,12 +176,12 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # Decode the keystore from your secret
-      - name: Decode keystore
+      # Decode the keystore if provided
+      - name: Setup Keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
-          # Verify the keystore was created properly
-          ls -la android/app/release.keystore
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+          fi
 
       # Make gradlew executable
       - name: Make gradlew executable
@@ -182,19 +193,22 @@ jobs:
           echo "BUILD_DATE=$(date -u '+%Y-%m-%d')" >> $GITHUB_ENV
           echo "BUILD_TIME=$(date -u '+%H-%M-%S')" >> $GITHUB_ENV
           echo "Build started at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "Builder: himanshu8443"
 
-      # Build the APKs with DIRECT SIGNING PARAMETERS as requested
-      - name: Build Android App with Direct Signing Parameters
+      # Build the APKs
+      - name: Build Android App
         run: |
           cd android
-          KEYSTORE_PATH=$(realpath app/release.keystore)
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=$KEYSTORE_PATH \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}" \
-            --stacktrace
+          if [ -f "app/release.keystore" ]; then
+            KEYSTORE_PATH=$(realpath app/release.keystore)
+            ./gradlew assembleRelease \
+              -Pandroid.injected.signing.store.file=$KEYSTORE_PATH \
+              -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+              -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+              -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}" \
+              --stacktrace
+          else
+            ./gradlew assembleRelease --stacktrace
+          fi
 
       # Find and identify the APKs
       - name: Identify APKs
@@ -261,62 +275,35 @@ jobs:
           ls -la apks/
 
           # Create a tag name for the release
-          NIGHTLY_DATE=$(date -u '+%Y%m%d')
-          RELEASE_TAG="nightly-${NIGHTLY_DATE}"
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+            echo "IS_PRERELEASE=false" >> $GITHUB_ENV
+          else
+            RELEASE_TAG="v${VERSION}"
+            echo "IS_PRERELEASE=false" >> $GITHUB_ENV
+          fi
           echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_ENV
 
-      # Delete ALL previous nightly releases (not just yesterday's)
-      - name: Delete All Previous Nightly Releases
-        run: |
-          # Fetch all tags
-          git fetch --tags
-
-          # List all nightly tags and delete them
-          NIGHTLY_TAGS=$(git tag -l "nightly-*" || echo "")
-
-          if [ -n "$NIGHTLY_TAGS" ]; then
-            echo "Found previous nightly tags: $NIGHTLY_TAGS"
-            
-            for TAG in $NIGHTLY_TAGS; do
-              echo "Deleting tag: $TAG"
-              git tag -d $TAG 2>/dev/null || true
-              git push --delete origin $TAG 2>/dev/null || true
-              
-              # Also delete the release via API
-              RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" | \
-                grep -o '"id": [0-9]*' | head -1 | sed 's/"id": //')
-              
-              if [ -n "$RELEASE_ID" ] && [ "$RELEASE_ID" != "null" ]; then
-                echo "Deleting release with ID: $RELEASE_ID"
-                curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                  "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
-              fi
-            done
-          else
-            echo "No previous nightly tags found"
-          fi
-
-      # Create a dedicated GitHub Release just for nightly builds
+      # Create a dedicated GitHub Release
       - name: Create GitHub Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: 'Nightly Build v${{ env.APP_VERSION }} (${{ env.BUILD_DATE }})'
+          name: 'Newflix ${{ env.RELEASE_TAG }}'
           body: |
-            > ⚠️ **NIGHTLY BUILD** ⚠️  
-            > Not recommended for regular users. Download version with latest tag not pre-release tag, for stable apk.
-            > This is an automated nightly build and may contain bugs or incomplete features.
+            ## Newflix Release ${{ env.RELEASE_TAG }}
+            - Universal TV (Android TV, Google TV, Fire TV) and Mobile support
+            - Pre-configured provider catalog from `nikhil2001gowda/newflix-providers`
 
-            **Version:** v${{ env.APP_VERSION }}
+            **Version:** ${{ env.RELEASE_TAG }}
             **Build Date:** ${{ env.BUILD_DATE }}
             **Commit:** [${{ env.COMMIT_HASH }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) by ${{ env.COMMIT_AUTHOR }}
             **Commit Message:** ${{ env.COMMIT_MSG }}
 
           files: ${{ steps.apk_files.outputs.apk_paths }}
           draft: false
-          prerelease: true
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
 
       # Also upload APKs as GitHub artifacts as backup
       - name: Upload APKs as GitHub artifacts
